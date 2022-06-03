@@ -6,8 +6,10 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using Azure.Storage.Blobs;
-using System.Text.Json;
+using Newtonsoft.Json;
 using Microsoft.EntityFrameworkCore.Design;
+using System.ComponentModel.DataAnnotations.Schema;
+using Pomelo.EntityFrameworkCore.MySql.Json.Newtonsoft;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +37,7 @@ builder.Services.AddDbContext<EmailDb>(options =>
         maxRetryCount: 10,
         maxRetryDelay: TimeSpan.FromSeconds(30),
         errorNumbersToAdd: null);
+        mySqlOptions.UseNewtonsoftJson();
     }));
 var app = builder.Build();
 
@@ -47,38 +50,36 @@ if (app.Environment.IsDevelopment())
 
 /* POST request with the email object*/
 app.MapPost("/api/emails", async(Email e, EmailDb db) => {
-    bool isUnique = e.Attributes.Distinct().Count() == e.Attributes.Count();
+    //bool isUnique = e.Attributes.Distinct().Count() == e.Attributes.Count();
     //checking if there every attribute is unique in the list. Assigning it to a variable so it's easier to read instead of
     //using the whole expression in the if statement
     int repeatCounter = 0;
-    if(isUnique)
-    {
-        db.Emails.Add(e);
-        await db.SaveChangesAsync();
-    }
-    else
-    {
-        for (int i = 0; i<e.Attributes.Count;i++)
+    //db.Emails.Add(e);
+    //await db.SaveChangesAsync();
+    /* placeholder for when I will need to check attributes for uniquity. I can't even submit attributes atm
+    so no reason for this to be uncommented
+        for (int i = 0; i<e.Attributes.Length;i++)
         {
             foreach (var eItem in e.Attributes)
             {
                 if (eItem == e.Attributes[i]) repeatCounter++;
-                if (repeatCounter>1) e.Attributes.RemoveAt(i);
+                //if (repeatCounter>1) e.Attributes.RemoveAt(i);
             }
         }
         db.Emails.Add(e);
         await db.SaveChangesAsync();
-    }
+        */
     //creating filepaths
     string localPath = "./data/";
-    string fileName = "quickstart" + Guid.NewGuid().ToString() + ".txt";
-    string localFilePath = Path.Combine(localPath, JsonSerializer.Serialize(e));
+    //string fileName = "quickstart" + Guid.NewGuid().ToString() + ".txt";
+    //string fileName = "email" + Guid.NewGuid().ToString();
+    string localFilePath = Path.Combine(localPath, e.ToString());
 
     // Write email to the file
-    await File.WriteAllTextAsync(localFilePath, fileName);
+    await File.WriteAllTextAsync(localFilePath, e.ToString());
 
     // Get a reference to a blob
-    BlobClient blobClient = containerClient.GetBlobClient(fileName);
+    BlobClient blobClient = containerClient.GetBlobClient(e.ToString());
 
     Console.WriteLine("Uploading to Blob storage as blob:\n\t {0}\n", blobClient.Uri);
 
@@ -95,16 +96,8 @@ record Email {
     [Key]
     public string Key { get; set; } = default!;
     public string email { get; set; } = default!;
-    public List<Primitive> Attributes { get; set; } = default!;
-}
-
-record Primitive
-{
-    public int PrimitiveId { get; set; }
-    public double Data { get; set; }
-
-    [Required]
-    public Email EmailClass { get; set; }
+    [Column(TypeName = "json")]
+    public string[] Attributes { get; set; } = default!;
 }
 class EmailDb: DbContext {
     public EmailDb(DbContextOptions<EmailDb> options): base(options) {
