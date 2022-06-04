@@ -78,6 +78,7 @@ StyleCopReport.xml
 *.ilk
 *.meta
 *.obj
+
 *.iobj
 *.pch
 *.pdb
@@ -454,3 +455,5 @@ $RECYCLE.BIN/
 !.vscode/extensions.json
 data/
 data/*
+obj/
+obj/*

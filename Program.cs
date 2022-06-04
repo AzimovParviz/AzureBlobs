@@ -18,8 +18,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 //https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-dotnet?tabs=environment-variable-linux#get-the-connection-string
-//string connectionStringAzure = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING");
-string connectionStringAzure = "DefaultEndpointsProtocol=https;AccountName=blobemails;AccountKey=EFwhw8VngfohdFDy4yZDmS8k7iDhFQuRbjmMoLImUb35DUw8PoxtS1RxnFIKQpe4mrZk09tlZYN6+AStoLBcRg==;EndpointSuffix=core.windows.net";
+string connectionStringAzure = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING");
 // Create a BlobServiceClient object which will be used to create a container client
 BlobServiceClient blobServiceClient = new BlobServiceClient(connectionStringAzure);
 
@@ -111,6 +110,12 @@ record Email {
     IMPORTANT!
     whenever you plan to do a migration, change the Attributes to a public string, because MySQL doesn't like arrays or lists
     */
+    public List<string> Attributes { get; set; } = default!;
+}
+
+record SendEmail {
+    [Key]
+    public string email { get; set; } = default!;
     public List<string> Attributes { get; set; } = default!;
 }
 class EmailDb: DbContext {
