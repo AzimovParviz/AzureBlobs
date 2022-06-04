@@ -49,25 +49,10 @@ if (app.Environment.IsDevelopment())
 
 /* POST request with the email object*/
 app.MapPost("/api/emails", async(Email e, EmailDb db) => {
-    //bool isUnique = e.Attributes.Distinct().Count() == e.Attributes.Count();
-    //checking if there every attribute is unique in the list. Assigning it to a variable so it's easier to read instead of
-    //using the whole expression in the if statement
+    //checking if there every attribute is unique in the list. If there are dupes, they'll be removed
+    e.Attributes = e.Attributes.Distinct().ToList();
     db.Emails.Add(e);
     await db.SaveChangesAsync();
-    //e.Attributes = JsonConvert.DeserializeObject(e.Attributes);
-    /* placeholder for when I will need to check attributes for uniquity. I can't even submit attributes atm
-    so no reason for this to be uncommented
-        for (int i = 0; i<e.Attributes.Length;i++)
-        {
-            foreach (var eItem in e.Attributes)
-            {
-                if (eItem == e.Attributes[i]) repeatCounter++;
-                //if (repeatCounter>1) e.Attributes.RemoveAt(i);
-            }
-        }
-        db.Emails.Add(e);
-        await db.SaveChangesAsync();
-    */
     //creating filepaths
     string localPath = "./data/";
     string fileName = e.Key + Guid.NewGuid().ToString();
@@ -114,10 +99,17 @@ record Email {
 }
 
 record SendEmail {
-    [Key]
     public string email { get; set; } = default!;
     public List<string> Attributes { get; set; } = default!;
+
+    public string body { get; set; } = default!;
+
+    public static string populateBody(List<string> Attributes)
+    {
+        return ("Congratulate! We have received following" + Attributes.Count + "unique attributes from you: " +  Attributes + "Best regards, Millisecond");
+    }
 }
+
 class EmailDb: DbContext {
     public EmailDb(DbContextOptions<EmailDb> options): base(options) {
 
