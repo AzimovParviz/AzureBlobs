@@ -75,9 +75,19 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
     string localFilePath = Path.Combine(localPath, fileName);
 
     // Write the data to the file
-    await File.WriteAllTextAsync(localFilePath, e.Key+" "+e.email);
-    await File.WriteAllLinesAsync(localFilePath,e.Attributes);
-
+    using (FileStream stream = new FileStream(localFilePath, FileMode.Create, FileAccess.ReadWrite))
+        {
+            using (StreamWriter streamWriter = new StreamWriter(stream))
+            {
+                await streamWriter.WriteLineAsync("Key: "+e.Key);
+                await streamWriter.WriteLineAsync("E-mail: "+e.email);
+                await streamWriter.WriteLineAsync("Attributes: ");
+                for (int i = 0; i<e.Attributes.Count;i++)
+                {
+                await streamWriter.WriteLineAsync(e.Attributes[i]);
+                }
+            }
+        }
     // Get a reference to a blob
     BlobClient blobClient = containerClient.GetBlobClient(fileName);
 
