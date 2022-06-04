@@ -53,9 +53,9 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
     //bool isUnique = e.Attributes.Distinct().Count() == e.Attributes.Count();
     //checking if there every attribute is unique in the list. Assigning it to a variable so it's easier to read instead of
     //using the whole expression in the if statement
-    int repeatCounter = 0;
-    //db.Emails.Add(e);
-    //await db.SaveChangesAsync();
+    db.Emails.Add(e);
+    await db.SaveChangesAsync();
+    //e.Attributes = JsonConvert.DeserializeObject(e.Attributes);
     /* placeholder for when I will need to check attributes for uniquity. I can't even submit attributes atm
     so no reason for this to be uncommented
         for (int i = 0; i<e.Attributes.Length;i++)
@@ -68,18 +68,18 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
         }
         db.Emails.Add(e);
         await db.SaveChangesAsync();
-        */
+    */
     //creating filepaths
     string localPath = "./data/";
-    //string fileName = "quickstart" + Guid.NewGuid().ToString() + ".txt";
-    //string fileName = "email" + Guid.NewGuid().ToString();
-    string localFilePath = Path.Combine(localPath, e.ToString());
+    string fileName = e.Key + Guid.NewGuid().ToString();
+    string localFilePath = Path.Combine(localPath, fileName);
 
-    // Write email to the file
-    await File.WriteAllTextAsync(localFilePath, e.ToString());
+    // Write the data to the file
+    await File.WriteAllTextAsync(localFilePath, e.Key+" "+e.email);
+    await File.WriteAllLinesAsync(localFilePath,e.Attributes);
 
     // Get a reference to a blob
-    BlobClient blobClient = containerClient.GetBlobClient(e.ToString());
+    BlobClient blobClient = containerClient.GetBlobClient(fileName);
 
     Console.WriteLine("Uploading to Blob storage as blob:\n\t {0}\n", blobClient.Uri);
 
@@ -97,7 +97,11 @@ record Email {
     public string Key { get; set; } = default!;
     public string email { get; set; } = default!;
     [Column(TypeName = "json")]
-    public string[] Attributes { get; set; } = default!;
+    /*
+    IMPORTANT!
+    whenever you plan to do a migration, change the Attributes to a public string, because MySQL doesn't like arrays or lists
+    */
+    public List<string> Attributes { get; set; } = default!;
 }
 class EmailDb: DbContext {
     public EmailDb(DbContextOptions<EmailDb> options): base(options) {
