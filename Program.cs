@@ -48,9 +48,46 @@ if (app.Environment.IsDevelopment())
 }
 
 /* POST request with the email object*/
+//TODO: real time operations
 app.MapPost("/api/emails", async(Email e, EmailDb db) => {
+    /*
+    finding all, if any, rows with the same email to count the attributes
+    */
+    List<string> totalAttributes = e.Attributes;//will hold total attributes for the letter we'll send
     //checking if there every attribute is unique in the list. If there are dupes, they'll be removed
     e.Attributes = e.Attributes.Distinct().ToList();
+    var findemails = from b in db.Emails
+                   where b.email.StartsWith(e.email)
+                   select b;
+    var findletters = db.SendEmails.Find(e.email);
+    //TODO: only when there are more than 10 attributes
+    if (findletters is null)
+    {
+        foreach (var item in findemails)
+        {
+            totalAttributes = totalAttributes.Concat(item.Attributes).ToList();
+        }
+        //wiping duplicates if there were dupe attributes across different queries
+        totalAttributes = totalAttributes.Concat(e.Attributes).ToList();
+        totalAttributes = totalAttributes.Distinct().ToList();
+        Console.WriteLine("total attributes: ", totalAttributes.ToString());
+        SendEmail letter = new SendEmail() {
+            email = e.email,
+            Attributes = totalAttributes,
+            body = SendEmail.populateBody(totalAttributes)
+        };
+        db.SendEmails.Add(letter);
+        await db.SaveChangesAsync();
+    }
+    else
+    {
+        findletters.Attributes = findletters.Attributes.Concat(e.Attributes).ToList();
+        findletters.body = SendEmail.populateBody(totalAttributes);
+        Console.WriteLine("total attributes: ", totalAttributes.ToString());
+        db.SendEmails.Update(findletters);
+        await db.SaveChangesAsync();
+    }
+
     db.Emails.Add(e);
     await db.SaveChangesAsync();
     //creating filepaths
@@ -99,15 +136,21 @@ record Email {
 }
 
 record SendEmail {
+    [Key]
     public string email { get; set; } = default!;
+    [Column(TypeName = "json")]
     public List<string> Attributes { get; set; } = default!;
 
     public string body { get; set; } = default!;
 
     public static string populateBody(List<string> Attributes)
     {
-        return ("Congratulate! We have received following" + Attributes.Count + "unique attributes from you: " +  Attributes + "Best regards, Millisecond");
+        return ("Congratulate! We have received following " + Attributes.Count + " unique attributes from you: " +  Attributes.ToString() + " Best regards, Millisecond");
     }
+}
+/* for checking how much attributes were sent in one day */
+public static class Dates {
+    public static DateTime cur_date = DateTime.UtcNow;
 }
 
 class EmailDb: DbContext {
@@ -115,6 +158,7 @@ class EmailDb: DbContext {
 
     }
     public DbSet<Email> Emails => Set<Email>();
+    public DbSet<SendEmail> SendEmails => Set<SendEmail>();
 }
 //https://stackoverflow.com/questions/19720662/handling-realtime-data
 //one of the probable method I could use for
