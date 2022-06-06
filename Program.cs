@@ -56,13 +56,13 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
     List<string> totalAttributes = e.Attributes;//will hold total attributes for the letter we'll send
     //checking if there every attribute is unique in the list. If there are dupes, they'll be removed
     e.Attributes = e.Attributes.Distinct().ToList();
-    var findemails = from b in db.Emails
-                   where b.email.StartsWith(e.email)
-                   select b;
     var findletters = db.SendEmails.Find(e.email);
     //TODO: only when there are more than 10 attributes
     if (findletters is null)
     {
+        var findemails = from b in db.Emails
+                   where b.email.StartsWith(e.email)
+                   select b;
         foreach (var item in findemails)
         {
             totalAttributes = totalAttributes.Concat(item.Attributes).ToList();
@@ -81,8 +81,9 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
     }
     else
     {
+        findletters.attributesReceivedToday += findletters.Attributes.Count;
         findletters.Attributes = findletters.Attributes.Concat(e.Attributes).ToList();
-        findletters.body = SendEmail.populateBody(totalAttributes);
+        if (findletters.attributesReceivedToday>=10) findletters.body = SendEmail.populateBody(totalAttributes);
         Console.WriteLine("total attributes: ", totalAttributes.ToString());
         db.SendEmails.Update(findletters);
         await db.SaveChangesAsync();
@@ -95,7 +96,8 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
     string fileName = e.Key + Guid.NewGuid().ToString();
     string localFilePath = Path.Combine(localPath, fileName);
 
-    // Write the data to the file
+    // Using StreamWriter here since just writingtofileasync won't work when writing multiple rows and using
+    // WriteAllLinesAsync for the Attributes which are List<string>
     using (FileStream stream = new FileStream(localFilePath, FileMode.Create, FileAccess.ReadWrite))
         {
             using (StreamWriter streamWriter = new StreamWriter(stream))
@@ -106,6 +108,17 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
                 for (int i = 0; i<e.Attributes.Count;i++)
                 {
                 await streamWriter.WriteLineAsync(e.Attributes[i]);
+                }
+                if(findletters is not null)
+                {
+                    await streamWriter.WriteLineAsync(findletters.body);
+                }
+                else
+                {
+                    //TODO: probably extra work and can be done more effeciently, will need to look at
+                    totalAttributes = totalAttributes.Concat(e.Attributes).ToList();
+                    totalAttributes = totalAttributes.Distinct().ToList();
+                    await streamWriter.WriteLineAsync(SendEmail.populateBody(totalAttributes));
                 }
             }
         }
@@ -140,25 +153,35 @@ record SendEmail {
     public string email { get; set; } = default!;
     [Column(TypeName = "json")]
     public List<string> Attributes { get; set; } = default!;
+    public int attributesReceivedToday { get; set; } = 0;
 
     public string body { get; set; } = default!;
 
     public static string populateBody(List<string> Attributes)
     {
-        return ("Congratulate! We have received following " + Attributes.Count + " unique attributes from you: " +  Attributes.ToString() + " Best regards, Millisecond");
+        return ("Congratulate! We have received following " + Attributes.Count + " unique attributes from you: " +  string.Join( ",", Attributes) + " Best regards, Millisecond");
     }
 }
-/* for checking how much attributes were sent in one day */
-public static class Dates {
-    public static DateTime cur_date = DateTime.UtcNow;
-}
 
+/* for checking how much attributes were sent in one day
+
+*/
+/* record EmailDate {
+    [Key]
+    public string id { get; set; } = default!;
+    public string email { get; set; } = default!;
+    //https://stackoverflow.com/questions/3633262/convert-datetime-for-mysql-using-c-sharp just in case
+    public static DateTime timestamp { get; set; }
+    [Column(TypeName = "json")]
+    public string Attributes { get; set; }
+} */
 class EmailDb: DbContext {
     public EmailDb(DbContextOptions<EmailDb> options): base(options) {
 
     }
     public DbSet<Email> Emails => Set<Email>();
     public DbSet<SendEmail> SendEmails => Set<SendEmail>();
+/*     public DbSet<EmailDate> EmailDates => Set<EmailDate>(); */
 }
 //https://stackoverflow.com/questions/19720662/handling-realtime-data
 //one of the probable method I could use for
