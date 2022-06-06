@@ -1,11 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using System.Text;
-using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using Azure.Storage.Blobs;
+using System.ComponentModel.DataAnnotations;
 using Newtonsoft.Json;
 using Microsoft.EntityFrameworkCore.Design;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -38,6 +35,7 @@ builder.Services.AddDbContext<EmailDb>(options =>
         errorNumbersToAdd: null);
         mySqlOptions.UseNewtonsoftJson();
     }));
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -50,15 +48,27 @@ if (app.Environment.IsDevelopment())
 /* POST request with the email object*/
 //TODO: real time operations
 app.MapPost("/api/emails", async(Email e, EmailDb db) => {
+    //creating filepaths
+    string localPath = "./data/";
+    string fileName = e.Key + Guid.NewGuid().ToString();
+    string localFilePath = Path.Combine(localPath, fileName);
     /*
     finding all, if any, rows with the same email to count the attributes
     */
     List<string> totalAttributes = e.Attributes;//will hold total attributes for the letter we'll send
     //checking if there every attribute is unique in the list. If there are dupes, they'll be removed
     e.Attributes = e.Attributes.Distinct().ToList();
+    var todaymail = from b in db.Emails
+                   where b.CreatedAt.Equals(DateTime.Today)
+                   select b;
     var findletters = db.SendEmails.Find(e.email);
+    foreach (var item in todaymail)
+    {
+        totalAttributes = totalAttributes.Concat(item.Attributes).ToList();
+    }
     //TODO: only when there are more than 10 attributes
-    if (findletters is null)
+    SendEmail holdletter;
+    if ((findletters is null) && (totalAttributes.Count>=10))
     {
         var findemails = from b in db.Emails
                    where b.email.StartsWith(e.email)
@@ -76,26 +86,26 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
             Attributes = totalAttributes,
             body = SendEmail.populateBody(totalAttributes)
         };
+        holdletter = letter;
         db.SendEmails.Add(letter);
         await db.SaveChangesAsync();
+        await File.WriteAllTextAsync(localFilePath, SendEmail.populateBody(letter.Attributes));
     }
-    else
+    else if ((findletters is not null) && (totalAttributes.Count>=10))
     {
-        findletters.attributesReceivedToday += findletters.Attributes.Count;
+        findletters.attributesReceivedToday += e.Attributes.Count;
         findletters.Attributes = findletters.Attributes.Concat(e.Attributes).ToList();
         if (findletters.attributesReceivedToday>=10) findletters.body = SendEmail.populateBody(totalAttributes);
+        else findletters.body = "";
         Console.WriteLine("total attributes: ", totalAttributes.ToString());
+        holdletter = findletters;
         db.SendEmails.Update(findletters);
         await db.SaveChangesAsync();
+        await File.WriteAllTextAsync(localFilePath, SendEmail.populateBody(findletters.Attributes));
     }
 
     db.Emails.Add(e);
     await db.SaveChangesAsync();
-    //creating filepaths
-    string localPath = "./data/";
-    string fileName = e.Key + Guid.NewGuid().ToString();
-    string localFilePath = Path.Combine(localPath, fileName);
-
     // Using StreamWriter here since just writingtofileasync won't work when writing multiple rows and using
     // WriteAllLinesAsync for the Attributes which are List<string>
     using (FileStream stream = new FileStream(localFilePath, FileMode.Create, FileAccess.ReadWrite))
@@ -108,17 +118,6 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
                 for (int i = 0; i<e.Attributes.Count;i++)
                 {
                 await streamWriter.WriteLineAsync(e.Attributes[i]);
-                }
-                if(findletters is not null)
-                {
-                    await streamWriter.WriteLineAsync(findletters.body);
-                }
-                else
-                {
-                    //TODO: probably extra work and can be done more effeciently, will need to look at
-                    totalAttributes = totalAttributes.Concat(e.Attributes).ToList();
-                    totalAttributes = totalAttributes.Distinct().ToList();
-                    await streamWriter.WriteLineAsync(SendEmail.populateBody(totalAttributes));
                 }
             }
         }
@@ -146,6 +145,7 @@ record Email {
     whenever you plan to do a migration, change the Attributes to a public string, because MySQL doesn't like arrays or lists
     */
     public List<string> Attributes { get; set; } = default!;
+    public DateTime CreatedAt { get; set; }
 }
 
 record SendEmail {
@@ -181,7 +181,12 @@ class EmailDb: DbContext {
     }
     public DbSet<Email> Emails => Set<Email>();
     public DbSet<SendEmail> SendEmails => Set<SendEmail>();
-/*     public DbSet<EmailDate> EmailDates => Set<EmailDate>(); */
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Email>()
+            .Property(b => b.CreatedAt)
+            .HasDefaultValueSql("CURRENT_DATE");
+    }
 }
 //https://stackoverflow.com/questions/19720662/handling-realtime-data
 //one of the probable method I could use for
