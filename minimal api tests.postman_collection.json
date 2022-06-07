@@ -1,0 +1,105 @@
+{
+	"info": {
+		"_postman_id": "1eeca76f-b816-4e3f-96db-fe65deb718ed",
+		"name": "minimal api tests",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "10 attributes at once",
+			"protocolProfileBehavior": {
+				"strictSSL": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"Key\" : \"{{$guid}}\",\n    \"email\" : \"{{$randomFirstName}}@{{$randomLastName}}\",\n    \"attributes\" : [\n        \"{{$randomFirstName}}\",\"{{$randomLastName}}\",\"{{$randomLoremWord}}\",\"{{$randomFirstName}}\",\"{{$randomLastName}}\",\"{{$randomLoremWord}}\", \"{{$randomFirstName}}\",\"{{$randomLastName}}\",\"{{$randomLoremWord}}\", \"{{$randomLoremWord}}\"\n        ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://localhost:7047/api/emails",
+					"protocol": "https",
+					"host": [
+						"localhost"
+					],
+					"port": "7047",
+					"path": [
+						"api",
+						"emails"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "9 attributes from 1 email",
+			"protocolProfileBehavior": {
+				"strictSSL": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"Key\" : \"{{$guid}}\",\n    \"email\" : \"john@jimmy\",\n    \"attributes\" : [\n        \"{{$randomFirstName}}\",\"{{$randomLastName}}\",\"{{$randomLoremWord}}\",\"{{$randomFirstName}}\",\"{{$randomLastName}}\",\"{{$randomLoremWord}}\", \"{{$randomFirstName}}\",\"{{$randomLastName}}\",\"{{$randomLoremWord}}\"\n        ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://localhost:7047/api/emails",
+					"protocol": "https",
+					"host": [
+						"localhost"
+					],
+					"port": "7047",
+					"path": [
+						"api",
+						"emails"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "1 attributes from the previous email",
+			"protocolProfileBehavior": {
+				"strictSSL": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"Key\" : \"{{$guid}}\",\n    \"email\" : \"john@jimmy\",\n    \"attributes\" : [\n        \"{{$randomFirstName}}\"\n        ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://localhost:7047/api/emails",
+					"protocol": "https",
+					"host": [
+						"localhost"
+					],
+					"port": "7047",
+					"path": [
+						"api",
+						"emails"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
