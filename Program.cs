@@ -46,7 +46,6 @@ if (app.Environment.IsDevelopment())
 }
 
 /* POST request with the email object*/
-//TODO: real time operations
 app.MapPost("/api/emails", async(Email e, EmailDb db) => {
     //creating filepaths
     string localPath = "./data/";
@@ -58,16 +57,18 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
     List<string> totalAttributes = e.Attributes;//will hold total attributes for the letter we'll send
     //checking if there every attribute is unique in the list. If there are dupes, they'll be removed
     e.Attributes = e.Attributes.Distinct().ToList();
+    /* searching for entries with the same date and email */
     var todaymail = from b in db.Emails
                    where b.CreatedAt.Equals(DateTime.Today)
+                   where b.email.StartsWith(e.email)
                    select b;
+    /* looking up whether there is a record in the table for the given Email */
     var findletters = db.SendEmails.Find(e.email);
     foreach (var item in todaymail)
     {
         totalAttributes = totalAttributes.Concat(item.Attributes).ToList();
     }
-    //TODO: only when there are more than 10 attributes
-    SendEmail holdletter;
+    //BUG: body column in the SendEmails table gets wiped whent there are 10 attributes and you add more
     if ((findletters is null) && (totalAttributes.Count>=10))
     {
         var findemails = from b in db.Emails
@@ -77,19 +78,26 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
         {
             totalAttributes = totalAttributes.Concat(item.Attributes).ToList();
         }
-        //wiping duplicates if there were dupe attributes across different queries
         totalAttributes = totalAttributes.Concat(e.Attributes).ToList();
         totalAttributes = totalAttributes.Distinct().ToList();
-        Console.WriteLine("total attributes: ", totalAttributes.ToString());
+        /* creating a new entry for the db */
         SendEmail letter = new SendEmail() {
             email = e.email,
             Attributes = totalAttributes,
+            attributesReceivedToday = totalAttributes.Count,
             body = SendEmail.populateBody(totalAttributes)
         };
-        holdletter = letter;
         db.SendEmails.Add(letter);
         await db.SaveChangesAsync();
         await File.WriteAllTextAsync(localFilePath, SendEmail.populateBody(letter.Attributes));
+        // Get a reference to a blob
+        BlobClient blobClientBody = containerClient.GetBlobClient(fileName);
+
+        Console.WriteLine("Uploading to Blob storage as blob:\n\t {0}\n", blobClientBody.Uri);
+
+        // Upload data from the local file
+        await blobClientBody.UploadAsync(localFilePath, true);
+
     }
     else if ((findletters is not null) && (totalAttributes.Count>=10))
     {
@@ -98,7 +106,15 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
         if (findletters.attributesReceivedToday>=10) findletters.body = SendEmail.populateBody(totalAttributes);
         else findletters.body = "";
         Console.WriteLine("total attributes: ", totalAttributes.ToString());
-        holdletter = findletters;
+        db.SendEmails.Update(findletters);
+        await db.SaveChangesAsync();
+        await File.WriteAllTextAsync(localFilePath, SendEmail.populateBody(findletters.Attributes));
+    }
+    else if ((findletters is not null) && (findletters.attributesReceivedToday>=10))
+    {
+        findletters.attributesReceivedToday += e.Attributes.Count;
+        findletters.Attributes = findletters.Attributes.Concat(e.Attributes).ToList();
+        findletters.body = SendEmail.populateBody(findletters.Attributes);
         db.SendEmails.Update(findletters);
         await db.SaveChangesAsync();
         await File.WriteAllTextAsync(localFilePath, SendEmail.populateBody(findletters.Attributes));
@@ -144,6 +160,7 @@ record Email {
     IMPORTANT!
     whenever you plan to do a migration, change the Attributes to a public string, because MySQL doesn't like arrays or lists
     */
+    /* Also comment out the MapPost method since it calls List methods and will prevent you from building since you changed it to string */
     public List<string> Attributes { get; set; } = default!;
     public DateTime CreatedAt { get; set; }
 }
@@ -151,6 +168,7 @@ record Email {
 record SendEmail {
     [Key]
     public string email { get; set; } = default!;
+    /* whenver you perform a migration change this to string instead of List<string> */
     [Column(TypeName = "json")]
     public List<string> Attributes { get; set; } = default!;
     public int attributesReceivedToday { get; set; } = 0;
@@ -163,24 +181,13 @@ record SendEmail {
     }
 }
 
-/* for checking how much attributes were sent in one day
-
-*/
-/* record EmailDate {
-    [Key]
-    public string id { get; set; } = default!;
-    public string email { get; set; } = default!;
-    //https://stackoverflow.com/questions/3633262/convert-datetime-for-mysql-using-c-sharp just in case
-    public static DateTime timestamp { get; set; }
-    [Column(TypeName = "json")]
-    public string Attributes { get; set; }
-} */
 class EmailDb: DbContext {
     public EmailDb(DbContextOptions<EmailDb> options): base(options) {
 
     }
     public DbSet<Email> Emails => Set<Email>();
     public DbSet<SendEmail> SendEmails => Set<SendEmail>();
+    /* so the CreatedAt in the Email record has the timestamp at the time of posting the request */
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Email>()
