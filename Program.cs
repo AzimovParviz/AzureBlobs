@@ -51,6 +51,7 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
     string localPath = "./data/";
     string fileName = e.Key + Guid.NewGuid().ToString();
     string localFilePath = Path.Combine(localPath, fileName);
+    string logFileName = e.CreatedAt.ToShortDateString().Replace("/","-") + Guid.NewGuid().ToString() + ".txt";
     /*
     finding all, if any, rows with the same email to count the attributes
     */
@@ -62,6 +63,15 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
                    where b.CreatedAt.Equals(DateTime.Today)
                    where b.email.StartsWith(e.email)
                    select b;
+    /* checking if there were any entries with given email today and if there weren't, we are logging it to the blob storage*/
+    if (!todaymail.Any())
+    {
+        await File.WriteAllTextAsync(logFileName,e.email);
+        // Get a reference to a blob for logging
+        BlobClient blobClientLog = containerClient.GetBlobClient(logFileName);
+        // Upload log from the local file
+        await blobClientLog.UploadAsync(logFileName, true);
+    }
     /* looking up whether there is a record in the table for the given Email */
     var findletters = db.SendEmails.Find(e.email);
     foreach (var item in todaymail)
@@ -92,9 +102,6 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
         await File.WriteAllTextAsync(localFilePath, SendEmail.populateBody(letter.Attributes));
         // Get a reference to a blob
         BlobClient blobClientBody = containerClient.GetBlobClient(fileName);
-
-        Console.WriteLine("Uploading to Blob storage as blob:\n\t {0}\n", blobClientBody.Uri);
-
         // Upload data from the local file
         await blobClientBody.UploadAsync(localFilePath, true);
 
@@ -105,7 +112,6 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
         findletters.Attributes = findletters.Attributes.Concat(e.Attributes).ToList();
         if (findletters.attributesReceivedToday>=10) findletters.body = SendEmail.populateBody(totalAttributes);
         else findletters.body = "";
-        Console.WriteLine("total attributes: ", totalAttributes.ToString());
         db.SendEmails.Update(findletters);
         await db.SaveChangesAsync();
         await File.WriteAllTextAsync(localFilePath, SendEmail.populateBody(findletters.Attributes));
@@ -139,9 +145,6 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
         }
     // Get a reference to a blob
     BlobClient blobClient = containerClient.GetBlobClient(fileName);
-
-    Console.WriteLine("Uploading to Blob storage as blob:\n\t {0}\n", blobClient.Uri);
-
     // Upload data from the local file
     await blobClient.UploadAsync(localFilePath, true);
 
