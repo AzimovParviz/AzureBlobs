@@ -153,50 +153,5 @@ app.MapPost("/api/emails", async(Email e, EmailDb db) => {
 
 app.UseHttpsRedirection();
 app.Run();
-
-record Email {
-    [Key]
-    public string Key { get; set; } = default!;
-    public string email { get; set; } = default!;
-    [Column(TypeName = "json")]
-    /*
-    IMPORTANT!
-    whenever you plan to do a migration, change the Attributes to a public string, because MySQL doesn't like arrays or lists
-    */
-    /* Also comment out the MapPost method since it calls List methods and will prevent you from building since you changed it to string */
-    public List<string> Attributes { get; set; } = default!;
-    public DateTime CreatedAt { get; set; }
-}
-
-record SendEmail {
-    [Key]
-    public string email { get; set; } = default!;
-    /* whenver you perform a migration change this to string instead of List<string> */
-    [Column(TypeName = "json")]
-    public List<string> Attributes { get; set; } = default!;
-    public int attributesReceivedToday { get; set; } = 0;
-
-    public string body { get; set; } = default!;
-
-    public static string populateBody(List<string> Attributes)
-    {
-        return ("Congratulate! We have received following " + Attributes.Count + " unique attributes from you: " +  string.Join( ",", Attributes) + " Best regards, Millisecond");
-    }
-}
-
-class EmailDb: DbContext {
-    public EmailDb(DbContextOptions<EmailDb> options): base(options) {
-
-    }
-    public DbSet<Email> Emails => Set<Email>();
-    public DbSet<SendEmail> SendEmails => Set<SendEmail>();
-    /* so the CreatedAt in the Email record has the timestamp at the time of posting the request */
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Email>()
-            .Property(b => b.CreatedAt)
-            .HasDefaultValueSql("CURRENT_DATE");
-    }
-}
 //https://stackoverflow.com/questions/19720662/handling-realtime-data
 //one of the probable method I could use for
